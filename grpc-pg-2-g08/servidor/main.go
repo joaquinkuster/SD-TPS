@@ -14,8 +14,9 @@ import (
 
 type servidor struct {
 	proto.UnimplementedMonitorServer
-	mu          sync.Mutex
-	ultimaVista map[string]time.Time
+	mu             sync.Mutex
+	ultimaVista    map[string]time.Time
+	estadoAnterior map[string]string
 }
 
 func (s *servidor) EnviarHeartbeat(stream proto.Monitor_EnviarHeartbeatServer) error {
@@ -48,11 +49,31 @@ func (s *servidor) detectorFallas(intervalo time.Duration) {
 		ahora := time.Now()
 
 		for nodo, ultimo := range s.ultimaVista {
+			segundos := ahora.Sub(ultimo).Seconds()
+			estado := ""
 
-			if ahora.Sub(ultimo) > 3*intervalo {
-				log.Printf("Fallo en Nodo %v inactivo desde hace %.0fs", nodo, ahora.Sub(ultimo).Seconds())
+			if segundos < 3*intervalo.Seconds() {
+				estado = "activo"
+			} else {
+				estado = "inactivo"
 			}
 
+			estadoPrevio, existe := s.estadoAnterior[nodo]
+
+			if !existe {
+				log.Printf("🔵 Nodo %v: CONECTADO por primera vez hace %.0fs", nodo, segundos)
+			} else if estadoPrevio == "inactivo" && estado == "activo" {
+				log.Printf("🟣 Nodo %v: REACTIVADO hace %.0fs", nodo, segundos)
+			} else if estadoPrevio == "activo" && estado == "inactivo" {
+				log.Printf("🔴 Nodo %v: CAÍDO hace %.0fs", nodo, segundos)
+			} else if estado == "inactivo" {
+				log.Printf("🟠 Nodo %v: INACTIVO desde hace %.0fs", nodo, segundos)
+			} else {
+				log.Printf("🟢 Nodo %v: ACTIVO desde hace %.0fs", nodo, segundos)
+			}
+
+			// Actualizamos el estado actual para el próximo ciclo
+			s.estadoAnterior[nodo] = estado
 		}
 
 		s.mu.Unlock()
@@ -66,7 +87,11 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	servidor := &servidor{ultimaVista: make(map[string]time.Time)}
+	servidor := &servidor{
+		ultimaVista:    make(map[string]time.Time),
+		estadoAnterior: make(map[string]string),
+	}
+
 	proto.RegisterMonitorServer(s, servidor)
 
 	go servidor.detectorFallas(5 * time.Second)
