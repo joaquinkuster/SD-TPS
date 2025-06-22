@@ -10,7 +10,7 @@ option go_package = "./proto";
 
 // Solicitud para Obtener valor según una clave.
 message SolicitudObtener {
- string clave = 1;
+ string clave = 1;                                       
 }
 
 // Respuesta de Obtener: contiene valor (bytes), reloj vectorial y flag “existe”.
@@ -18,7 +18,7 @@ message RespuestaObtener {
  bytes valor = 1;
  bytes relojVector = 2; // Reloj vectorial serializado
  bool existe = 3;
-}
+}                                                                
 
 // Solicitud para Guardar (clave, valor).
 // El campo relojVector solo se usa si el cliente trae su propio vector; puede quedar vacío.
